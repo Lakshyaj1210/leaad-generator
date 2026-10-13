@@ -1,0 +1,474 @@
+{
+  "name": "Lead Generation & Qualification Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 300],
+      "notes": "Runs every 6 hours. Can be replaced with Manual Trigger or Webhook Trigger."
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 480],
+      "notes": "Use this for on-demand testing."
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-ingest",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [200, 660],
+      "webhookId": "lead-ingest-webhook",
+      "notes": "Accepts POST payloads from external lead sources."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// MOCK LEAD FETCHER — simulates an HTTP API or CRM export\n// Replace this node with a real HTTP Request node in production.\n// ============================================================\nconst rawLeads = [\n  {\n    id: 'L001',\n    name: 'Priya Sharma',\n    email: 'priya.sharma@techventures.io',\n    company: 'TechVentures AI',\n    title: 'CTO',\n    domain: 'techventures.io',\n    annual_revenue: 12000000,\n    employee_count: 220,\n    industry: 'Artificial Intelligence',\n    ai_adoption_interest: 'high',\n    compute_readiness: 'cloud-native',\n    tech_stack: ['AWS', 'Kubernetes', 'TensorFlow'],\n    country: 'IN',\n    source: 'LinkedIn'\n  },\n  {\n    id: 'L002',\n    name: 'James Harrington',\n    email: 'j.harrington@quantumfinance.com',\n    company: 'Quantum Finance Corp',\n    title: 'VP Operations',\n    domain: 'quantumfinance.com',\n    annual_revenue: 85000000,\n    employee_count: 1500,\n    industry: 'Financial Services',\n    regulatory_domain: 'SEC',\n    transaction_scale: 'enterprise',\n    fintech_keywords: ['derivatives', 'risk management', 'compliance'],\n    country: 'US',\n    source: 'Webinar'\n  },\n  {\n    id: 'L003',\n    name: 'Bad Lead',\n    email: 'not-a-valid-email',\n    company: '',\n    title: '',\n    domain: 'spam.biz',\n    annual_revenue: 0,\n    employee_count: 0,\n    industry: 'Unknown',\n    country: 'XX',\n    source: 'Unknown'\n  },\n  {\n    id: 'L004',\n    name: 'Sofia Andersen',\n    email: 'sofia@nordichealthtech.dk',\n    company: 'Nordic HealthTech',\n    title: 'Head of AI Research',\n    domain: 'nordichealthtech.dk',\n    annual_revenue: 9500000,\n    employee_count: 180,\n    industry: 'HealthTech',\n    ai_adoption_interest: 'medium',\n    compute_readiness: 'hybrid',\n    tech_stack: ['Azure', 'PyTorch'],\n    country: 'DK',\n    source: 'Conference'\n  },\n  {\n    id: 'L005',\n    name: 'Raj Patel',\n    email: 'raj.patel@fintechbridge.com',\n    company: 'FinTechBridge Ltd',\n    title: 'CEO',\n    domain: 'fintechbridge.com',\n    annual_revenue: 32000000,\n    employee_count: 420,\n    industry: 'FinTech',\n    regulatory_domain: 'FCA',\n    transaction_scale: 'mid-market',\n    fintech_keywords: ['payments', 'blockchain', 'AML'],\n    country: 'GB',\n    source: 'Partner Referral'\n  },\n  {\n    id: 'L004',\n    name: 'Sofia Andersen',\n    email: 'sofia@nordichealthtech.dk',\n    company: 'Nordic HealthTech (duplicate)',\n    title: 'Head of AI Research',\n    domain: 'nordichealthtech.dk',\n    annual_revenue: 9500000,\n    employee_count: 180,\n    industry: 'HealthTech',\n    ai_adoption_interest: 'medium',\n    compute_readiness: 'hybrid',\n    tech_stack: ['Azure', 'PyTorch'],\n    country: 'DK',\n    source: 'Conference'\n  },\n  {\n    id: 'L006',\n    name: 'Alex Chen',\n    email: 'alex@user123@broken-email',\n    company: 'Broken Co',\n    title: 'Manager',\n    domain: '',\n    annual_revenue: 500000,\n    employee_count: 5,\n    industry: 'Retail',\n    country: 'SG',\n    source: 'Form'\n  }\n];\n\n// Attach initial lifecycle state\nconst leads = rawLeads.map(lead => ({\n  ...lead,\n  _state: 'NEW',\n  _ingested_at: new Date().toISOString(),\n  _pipeline_version: '2.1.0'\n}));\n\nreturn leads.map(lead => ({ json: lead }));\n"
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Mock Lead Fetcher",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 420],
+      "notes": "Simulates fetching raw leads from an API. Replace with HTTP Request node for production."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// STAGE 1: SYNTAX VALIDATION & DEDUPLICATION\n// State transition: NEW -> VALIDATED | DISQUALIFIED\n// ============================================================\n\nconst EMAIL_REGEX = /^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$/;\nconst BLOCKLIST_DOMAINS = new Set([\n  'spam.biz', 'test.com', 'example.com', 'mailinator.com',\n  'guerrillamail.com', 'throwam.com', 'yopmail.com'\n]);\n\nconst seen = new Map(); // email -> first lead id (dedup tracker)\nconst results = [];\n\nfor (const item of $input.all()) {\n  const lead = { ...item.json };\n  const disqualifyReasons = [];\n\n  // --- Email Syntax Check ---\n  if (!lead.email || !EMAIL_REGEX.test(lead.email.trim())) {\n    disqualifyReasons.push('INVALID_EMAIL_SYNTAX');\n  }\n\n  // --- Name / Company Check ---\n  if (!lead.name || lead.name.trim().length < 2) {\n    disqualifyReasons.push('MISSING_NAME');\n  }\n  if (!lead.company || lead.company.trim().length < 2) {\n    disqualifyReasons.push('MISSING_COMPANY');\n  }\n\n  // --- Domain Blocklist Check ---\n  const domain = (lead.domain || '').toLowerCase().trim();\n  if (!domain || BLOCKLIST_DOMAINS.has(domain)) {\n    disqualifyReasons.push('BLOCKED_OR_MISSING_DOMAIN');\n  }\n\n  // --- Deduplication (by email) ---\n  const emailKey = (lead.email || '').toLowerCase().trim();\n  if (emailKey && seen.has(emailKey)) {\n    disqualifyReasons.push(`DUPLICATE_OF_${seen.get(emailKey)}`);\n  } else if (emailKey) {\n    seen.set(emailKey, lead.id);\n  }\n\n  // --- Revenue Floor Check ---\n  if (!lead.annual_revenue || lead.annual_revenue < 1000000) {\n    disqualifyReasons.push('REVENUE_BELOW_THRESHOLD');\n  }\n\n  // Apply state transition\n  if (disqualifyReasons.length > 0) {\n    lead._state = 'DISQUALIFIED';\n    lead._disqualify_reasons = disqualifyReasons;\n    lead._disqualified_at = new Date().toISOString();\n  } else {\n    lead._state = 'VALIDATED';\n    lead._validated_at = new Date().toISOString();\n  }\n\n  results.push({ json: lead });\n}\n\nreturn results;\n"
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Syntax Validator & Deduplicator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 420],
+      "notes": "Validates email syntax, deduplicates by email, checks domain blocklist, enforces revenue floor. Transitions: NEW -> VALIDATED | DISQUALIFIED"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-validated",
+              "leftValue": "={{ $json._state }}",
+              "rightValue": "VALIDATED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Filter Validated Leads",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [980, 300],
+      "notes": "Passes only VALIDATED leads to the scoring engine. DISQUALIFIED leads flow to the dead-letter branch."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-disqualified",
+              "leftValue": "={{ $json._state }}",
+              "rightValue": "DISQUALIFIED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Filter Disqualified Leads",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [980, 560],
+      "notes": "Captures DISQUALIFIED leads for the dead-letter quarantine log."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// STAGE 2: MULTI-DIMENSIONAL LEAD SCORING ENGINE\n// State transition: VALIDATED -> SCORED\n// Produces: _score_total, _score_breakdown, _primary_domain\n// ============================================================\n\nconst AI_INDUSTRIES = new Set([\n  'artificial intelligence', 'machine learning', 'data science',\n  'healthtech', 'edtech', 'robotics', 'autonomous systems',\n  'computer vision', 'nlp', 'deep learning', 'mlops'\n]);\n\nconst FINTECH_INDUSTRIES = new Set([\n  'financial services', 'fintech', 'banking', 'insurance',\n  'wealth management', 'payments', 'cryptocurrency', 'capital markets',\n  'asset management', 'lending', 'compliance'\n]);\n\nconst COMPUTE_SCORE_MAP = {\n  'cloud-native': 30,\n  'hybrid': 20,\n  'on-premise': 10,\n  'none': 0\n};\n\nconst AI_INTEREST_SCORE_MAP = {\n  'high': 40,\n  'medium': 25,\n  'low': 10,\n  'none': 0\n};\n\nconst TRANSACTION_SCALE_SCORE_MAP = {\n  'enterprise': 40,\n  'mid-market': 25,\n  'smb': 10\n};\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const lead = { ...item.json };\n  const breakdown = {};\n\n  const industry = (lead.industry || '').toLowerCase();\n\n  // --- Revenue Score (0–30) ---\n  const rev = lead.annual_revenue || 0;\n  let revScore = 0;\n  if (rev >= 50000000) revScore = 30;\n  else if (rev >= 20000000) revScore = 22;\n  else if (rev >= 10000000) revScore = 15;\n  else if (rev >= 5000000) revScore = 10;\n  else revScore = 5;\n  breakdown.revenue = revScore;\n\n  // --- Headcount Score (0–15) ---\n  const emp = lead.employee_count || 0;\n  let empScore = 0;\n  if (emp >= 1000) empScore = 15;\n  else if (emp >= 500) empScore = 12;\n  else if (emp >= 200) empScore = 9;\n  else if (emp >= 50) empScore = 6;\n  else empScore = 2;\n  breakdown.headcount = empScore;\n\n  // --- Seniority Score (0–15) ---\n  const title = (lead.title || '').toLowerCase();\n  let seniorityScore = 0;\n  if (['ceo', 'cto', 'cfo', 'coo', 'founder', 'co-founder', 'president'].some(t => title.includes(t))) {\n    seniorityScore = 15;\n  } else if (['vp', 'vice president', 'director', 'head of'].some(t => title.includes(t))) {\n    seniorityScore = 10;\n  } else if (['manager', 'lead', 'principal'].some(t => title.includes(t))) {\n    seniorityScore = 6;\n  } else {\n    seniorityScore = 2;\n  }\n  breakdown.seniority = seniorityScore;\n\n  // --- Domain-Specific Scoring ---\n  let aiScore = 0;\n  let finScore = 0;\n\n  // AI/ML Scoring\n  if (AI_INDUSTRIES.has(industry)) aiScore += 20;\n  aiScore += AI_INTEREST_SCORE_MAP[lead.ai_adoption_interest] || 0;\n  aiScore += COMPUTE_SCORE_MAP[lead.compute_readiness] || 0;\n  const techStackBonus = Array.isArray(lead.tech_stack)\n    ? Math.min(lead.tech_stack.length * 3, 15)\n    : 0;\n  aiScore += techStackBonus;\n  breakdown.ai_domain = aiScore;\n\n  // Financial Scoring\n  if (FINTECH_INDUSTRIES.has(industry)) finScore += 20;\n  const regulatoryBonus = lead.regulatory_domain ? 15 : 0;\n  finScore += regulatoryBonus;\n  finScore += TRANSACTION_SCALE_SCORE_MAP[lead.transaction_scale] || 0;\n  const fintechKeyBonus = Array.isArray(lead.fintech_keywords)\n    ? Math.min(lead.fintech_keywords.length * 5, 20)\n    : 0;\n  finScore += fintechKeyBonus;\n  breakdown.financial_domain = finScore;\n\n  // --- Source Quality Score (0–10) ---\n  const sourceScoreMap = {\n    'Partner Referral': 10, 'Conference': 8, 'Webinar': 6,\n    'LinkedIn': 5, 'Form': 3, 'Unknown': 0\n  };\n  const sourceScore = sourceScoreMap[lead.source] || 0;\n  breakdown.source_quality = sourceScore;\n\n  // --- Total Score & Primary Domain ---\n  const baseScore = revScore + empScore + seniorityScore + sourceScore;\n  const totalAI  = baseScore + aiScore;\n  const totalFin = baseScore + finScore;\n\n  let primaryDomain = 'GENERAL';\n  let totalScore = baseScore;\n\n  if (aiScore >= finScore && aiScore > 10) {\n    primaryDomain = 'AI_ML';\n    totalScore = totalAI;\n  } else if (finScore > aiScore && finScore > 10) {\n    primaryDomain = 'FINANCIAL';\n    totalScore = totalFin;\n  }\n\n  lead._state = 'SCORED';\n  lead._score_total = totalScore;\n  lead._score_breakdown = breakdown;\n  lead._primary_domain = primaryDomain;\n  lead._scored_at = new Date().toISOString();\n\n  results.push({ json: lead });\n}\n\nreturn results;\n"
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Lead Scoring Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1240, 300],
+      "notes": "Multi-dimensional scoring: Revenue, Headcount, Seniority, AI Domain, Financial Domain, Source Quality. State: VALIDATED -> SCORED"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// STAGE 3: QUALIFICATION GATE\n// State transition: SCORED -> QUALIFIED_* | DISQUALIFIED\n// Thresholds:\n//   AI_ML lead:      score >= 60\n//   FINANCIAL lead:  score >= 70\n//   GENERAL lead:    score >= 55\n// ============================================================\n\nconst THRESHOLDS = {\n  AI_ML:     60,\n  FINANCIAL: 70,\n  GENERAL:   55\n};\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const lead = { ...item.json };\n  const score = lead._score_total || 0;\n  const domain = lead._primary_domain || 'GENERAL';\n  const threshold = THRESHOLDS[domain] || 55;\n\n  if (score >= threshold) {\n    if (domain === 'AI_ML') {\n      lead._state = 'QUALIFIED_AI_LEAD';\n    } else if (domain === 'FINANCIAL') {\n      lead._state = 'QUALIFIED_FINANCIAL_LEAD';\n    } else {\n      lead._state = 'QUALIFIED_AI_LEAD'; // fallback\n    }\n    lead._qualified_at = new Date().toISOString();\n  } else {\n    lead._state = 'DISQUALIFIED';\n    lead._disqualify_reasons = lead._disqualify_reasons || [];\n    lead._disqualify_reasons.push(`SCORE_BELOW_THRESHOLD_${threshold}_ACTUAL_${score}`);\n    lead._disqualified_at = new Date().toISOString();\n  }\n\n  results.push({ json: lead });\n}\n\nreturn results;\n"
+      },
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Qualification Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 300],
+      "notes": "Applies score thresholds to transition leads to QUALIFIED_AI_LEAD, QUALIFIED_FINANCIAL_LEAD, or back to DISQUALIFIED."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "rule-ai",
+                    "leftValue": "={{ $json._state }}",
+                    "rightValue": "QUALIFIED_AI_LEAD",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "AI_ML_Leads"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "rule-fin",
+                    "leftValue": "={{ $json._state }}",
+                    "rightValue": "QUALIFIED_FINANCIAL_LEAD",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Financial_Leads"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "rule-disq",
+                    "leftValue": "={{ $json._state }}",
+                    "rightValue": "DISQUALIFIED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Disqualified"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Domain Router Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1760, 300],
+      "notes": "Routes qualified leads to their domain-specific persistence endpoints. Three outputs: AI_ML_Leads, Financial_Leads, Disqualified."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// AI/ML CRM PERSISTENCE — Simulates CRM API push\n// In production: replace with HTTP Request to HubSpot / Salesforce\n// ============================================================\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const lead = { ...item.json };\n\n  // Enrich with CRM-specific metadata\n  const crmPayload = {\n    crm_record_id:    `AI-${lead.id}-${Date.now()}`,\n    pipeline:         'AI_ML_Enterprise',\n    stage:            'New Lead',\n    owner:            'ai-sales-team@company.com',\n    priority:         lead._score_total >= 90 ? 'HIGH' : lead._score_total >= 75 ? 'MEDIUM' : 'STANDARD',\n    contact_name:     lead.name,\n    contact_email:    lead.email,\n    contact_title:    lead.title,\n    company_name:     lead.company,\n    company_domain:   lead.domain,\n    annual_revenue:   lead.annual_revenue,\n    employee_count:   lead.employee_count,\n    lead_score:       lead._score_total,\n    score_breakdown:  lead._score_breakdown,\n    ai_interest:      lead.ai_adoption_interest,\n    compute_readiness:lead.compute_readiness,\n    tech_stack:       lead.tech_stack,\n    source:           lead.source,\n    country:          lead.country,\n    ingested_at:      lead._ingested_at,\n    qualified_at:     lead._qualified_at,\n    crm_pushed_at:    new Date().toISOString()\n  };\n\n  console.log(`[CRM-AI] Pushing lead ${lead.id} to AI pipeline: score=${lead._score_total}`);\n\n  results.push({\n    json: {\n      ...lead,\n      _crm_payload: crmPayload,\n      _persisted_to: 'AI_ML_CRM',\n      _persisted_at: new Date().toISOString()\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "id": "a1b2c3d4-0011-4000-8000-000000000011",
+      "name": "AI/ML CRM Persistence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2020, 160],
+      "notes": "Simulates pushing AI/ML qualified leads to a CRM. Replace with HTTP Request to HubSpot, Salesforce, or Pipedrive."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// FINANCIAL CRM PERSISTENCE — Simulates CRM API push\n// In production: replace with HTTP Request to Salesforce FSC\n// ============================================================\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const lead = { ...item.json };\n\n  const crmPayload = {\n    crm_record_id:      `FIN-${lead.id}-${Date.now()}`,\n    pipeline:           'Financial_Corporate',\n    stage:              'Discovery',\n    owner:              'fintech-sales-team@company.com',\n    priority:           lead._score_total >= 110 ? 'HIGH' : lead._score_total >= 90 ? 'MEDIUM' : 'STANDARD',\n    contact_name:       lead.name,\n    contact_email:      lead.email,\n    contact_title:      lead.title,\n    company_name:       lead.company,\n    company_domain:     lead.domain,\n    annual_revenue:     lead.annual_revenue,\n    employee_count:     lead.employee_count,\n    lead_score:         lead._score_total,\n    score_breakdown:    lead._score_breakdown,\n    regulatory_domain:  lead.regulatory_domain,\n    transaction_scale:  lead.transaction_scale,\n    fintech_keywords:   lead.fintech_keywords,\n    source:             lead.source,\n    country:            lead.country,\n    ingested_at:        lead._ingested_at,\n    qualified_at:       lead._qualified_at,\n    crm_pushed_at:      new Date().toISOString()\n  };\n\n  console.log(`[CRM-FIN] Pushing lead ${lead.id} to Financial pipeline: score=${lead._score_total}`);\n\n  results.push({\n    json: {\n      ...lead,\n      _crm_payload: crmPayload,\n      _persisted_to: 'FINANCIAL_CRM',\n      _persisted_at: new Date().toISOString()\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "id": "a1b2c3d4-0012-4000-8000-000000000012",
+      "name": "Financial CRM Persistence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2020, 340],
+      "notes": "Simulates pushing Financial qualified leads to a CRM. Replace with Salesforce or HubSpot HTTP Request node."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// DEAD-LETTER QUARANTINE — Logs all disqualified leads\n// In production: append to Google Sheets, S3, or audit DB\n// ============================================================\n\nconst results = [];\nconst timestamp = new Date().toISOString();\n\nfor (const item of $input.all()) {\n  const lead = { ...item.json };\n\n  const quarantineRecord = {\n    quarantine_id:      `DLQ-${lead.id || 'UNKNOWN'}-${Date.now()}`,\n    original_id:        lead.id,\n    email:              lead.email,\n    company:            lead.company,\n    state:              lead._state,\n    disqualify_reasons: (lead._disqualify_reasons || []).join(' | '),\n    score_at_rejection: lead._score_total || null,\n    domain:             lead._primary_domain || null,\n    ingested_at:        lead._ingested_at,\n    disqualified_at:    lead._disqualified_at || timestamp,\n    quarantined_at:     timestamp,\n    raw_snapshot:       JSON.stringify(lead)\n  };\n\n  console.warn(`[DLQ] Quarantined: ${lead.email} — Reasons: ${quarantineRecord.disqualify_reasons}`);\n\n  results.push({ json: quarantineRecord });\n}\n\nreturn results;\n"
+      },
+      "id": "a1b2c3d4-0013-4000-8000-000000000013",
+      "name": "Dead-Letter Quarantine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2020, 520],
+      "notes": "Captures all DISQUALIFIED leads into a structured quarantine log. In production, write to Google Sheets, S3, or a database table."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// PIPELINE METRICS AGGREGATOR\n// Produces run-level summary for monitoring / alerting\n// ============================================================\n\nconst allItems = $input.all();\nconst summary = {\n  run_id:             `RUN-${Date.now()}`,\n  run_timestamp:      new Date().toISOString(),\n  pipeline_version:   '2.1.0',\n  total_ingested:     allItems.length,\n  total_ai_qualified: 0,\n  total_fin_qualified:0,\n  total_disqualified: 0,\n  avg_score_qualified: 0,\n  top_lead: null,\n  disqualify_reason_tally: {}\n};\n\nlet qualifiedScoreSum = 0;\nlet qualifiedCount = 0;\nlet topScore = -1;\n\nfor (const item of allItems) {\n  const lead = item.json;\n  const state = lead._state || '';\n\n  if (state === 'QUALIFIED_AI_LEAD') summary.total_ai_qualified++;\n  else if (state === 'QUALIFIED_FINANCIAL_LEAD') summary.total_fin_qualified++;\n  else if (state === 'DISQUALIFIED') {\n    summary.total_disqualified++;\n    const reasons = lead._disqualify_reasons || [];\n    reasons.forEach(r => {\n      summary.disqualify_reason_tally[r] = (summary.disqualify_reason_tally[r] || 0) + 1;\n    });\n  }\n\n  if (lead._score_total && state.startsWith('QUALIFIED')) {\n    qualifiedScoreSum += lead._score_total;\n    qualifiedCount++;\n    if (lead._score_total > topScore) {\n      topScore = lead._score_total;\n      summary.top_lead = {\n        id: lead.id,\n        name: lead.name,\n        company: lead.company,\n        score: lead._score_total,\n        state: lead._state\n      };\n    }\n  }\n}\n\nsummary.avg_score_qualified = qualifiedCount > 0\n  ? Math.round(qualifiedScoreSum / qualifiedCount)\n  : 0;\n\nconsole.log('[METRICS]', JSON.stringify(summary, null, 2));\n\nreturn [{ json: summary }];\n"
+      },
+      "id": "a1b2c3d4-0014-4000-8000-000000000014",
+      "name": "Pipeline Metrics Aggregator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2280, 380],
+      "notes": "Aggregates run-level metrics: total qualified, disqualified, avg score, top lead. Feed this to Slack, email, or a dashboard."
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Mock Lead Fetcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Mock Lead Fetcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Mock Lead Fetcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Lead Fetcher": {
+      "main": [
+        [
+          {
+            "node": "Syntax Validator & Deduplicator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Syntax Validator & Deduplicator": {
+      "main": [
+        [
+          {
+            "node": "Filter Validated Leads",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter Disqualified Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Validated Leads": {
+      "main": [
+        [
+          {
+            "node": "Lead Scoring Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Disqualified Leads": {
+      "main": [
+        [
+          {
+            "node": "Dead-Letter Quarantine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Scoring Engine": {
+      "main": [
+        [
+          {
+            "node": "Qualification Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qualification Gate": {
+      "main": [
+        [
+          {
+            "node": "Domain Router Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domain Router Switch": {
+      "main": [
+        [
+          {
+            "node": "AI/ML CRM Persistence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Financial CRM Persistence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dead-Letter Quarantine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI/ML CRM Persistence": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Metrics Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Financial CRM Persistence": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Metrics Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dead-Letter Quarantine": {
+      "main": [
+        [
+          {
+            "node": "Pipeline Metrics Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2026-10-13T06:49:00.000Z",
+      "updatedAt": "2026-10-13T06:49:00.000Z",
+      "id": "tag-lead-gen",
+      "name": "lead-generation"
+    },
+    {
+      "createdAt": "2026-10-13T06:49:00.000Z",
+      "updatedAt": "2026-10-13T06:49:00.000Z",
+      "id": "tag-automation",
+      "name": "automation"
+    },
+    {
+      "createdAt": "2026-10-13T06:49:00.000Z",
+      "updatedAt": "2026-10-13T06:49:00.000Z",
+      "id": "tag-mentorship",
+      "name": "mentorship-project"
+    }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-10-13T06:49:00.000Z",
+  "versionId": "a1b2c3d4-ffff-4000-8000-000000000099"
+}
